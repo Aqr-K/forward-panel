@@ -19,8 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        goos: [linux, windows, darwin] # 操作系统
-        goarch: [amd64, arm64]       # CPU 架构
+        # 操作系统
+        goos: [linux, windows, darwin]
+        # CPU 架构
+        goarch: [amd64, arm64]
         exclude:
           # 如果有不需要的组合，可以在这里排除
           - goos: windows
@@ -60,7 +62,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: gost-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: go-gost/${{ steps.build.outputs.asset_name }}${{ steps.build.outputs.asset_name }}
+          path: go-gost/${{ steps.build.outputs.asset_name }}
 
   # 创建 GitHub Release
   release:
