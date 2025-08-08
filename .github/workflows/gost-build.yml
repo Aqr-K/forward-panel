@@ -54,15 +54,19 @@ jobs:
           echo "正在构建，输出文件为: ${FINAL_NAME}"
           
           go build -v -o "${FINAL_NAME}" -ldflags="-s -w" .
+
+          echo "正在为 ${FINAL_NAME} 生成 SHA256 ..."
+          sha256sum "${FINAL_NAME}" > "${FINAL_NAME}.sha256"
           
-          # 将最终文件名设置为步骤输出，方便上传
           echo "asset_name=${FINAL_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: gost-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: go-gost/${{ steps.build.outputs.asset_name }}
+          path: |
+            go-gost/${{ steps.build.outputs.asset_name }}
+            go-gost/${{ steps.build.outputs.asset_name }}.sha256
 
   # 创建 GitHub Release
   release:
