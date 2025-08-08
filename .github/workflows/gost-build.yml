@@ -46,7 +46,8 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          FINAL_NAME="gost-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BASE_NAME="gost-${{ matrix.goos }}-${{ matrix.goarch }}"
+          FINAL_NAME="${BASE_NAME}"
           if [ "${{ matrix.goos }}" == "windows" ]; then
             FINAL_NAME="${FINAL_NAME}.exe"
           fi
@@ -56,7 +57,7 @@ jobs:
           go build -v -o "${FINAL_NAME}" -ldflags="-s -w" .
 
           echo "正在为 ${FINAL_NAME} 生成 SHA256 ..."
-          sha256sum "${FINAL_NAME}" > "${FINAL_NAME}.sha256"
+          sha256sum "${FINAL_NAME}" > "${BASE_NAME}.sha256"
           
           echo "asset_name=${FINAL_NAME}" >> $GITHUB_OUTPUT
 
