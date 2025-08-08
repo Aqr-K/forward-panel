@@ -56,3 +56,18 @@ func ForceClosePortConnections(addr string) (err error) {
 	fmt.Printf("✅ 正在断开端口 %d 上的所有连接...\n", port)
 	return nil
 }
+
+func splitHostPort(addr string) (string, string, error) {
+	if !strings.Contains(addr, ":") {
+		return "", "", fmt.Errorf("missing port in address")
+	}
+	return netSplitHostPortCompat(addr)
+}
+。
+func netSplitHostPortCompat(addr string) (string, string, error) {
+	lastColon := strings.LastIndex(addr, ":")
+	if lastColon < 0 {
+		return "", "", fmt.Errorf("missing port")
+	}
+	return addr[:lastColon], addr[lastColon+1:], nil
+}

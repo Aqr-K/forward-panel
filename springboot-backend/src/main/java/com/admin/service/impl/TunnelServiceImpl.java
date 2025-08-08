@@ -137,6 +137,13 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return outNodeSetupResult;
         }
 
+        // 5.1 保存多级代理链，仅隧道转发时生效
+        if (Objects.equals(tunnelDto.getType(), TUNNEL_TYPE_TUNNEL_FORWARD)) {
+            tunnel.setRelayChain(tunnelDto.getRelayChain());
+        } else {
+            tunnel.setRelayChain(null);
+        }
+
         // 6. 设置默认属性并保存
         setDefaultTunnelProperties(tunnel);
         boolean result = this.save(tunnel);
@@ -175,10 +182,11 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return nameValidationResult;
         }
         int up = 0;
-        if (!Objects.equals(existingTunnel.getTcpListenAddr(), tunnelUpdateDto.getTcpListenAddr()) ||
+    if (!Objects.equals(existingTunnel.getTcpListenAddr(), tunnelUpdateDto.getTcpListenAddr()) ||
                 !Objects.equals(existingTunnel.getUdpListenAddr(), tunnelUpdateDto.getUdpListenAddr()) ||
                 !Objects.equals(existingTunnel.getProtocol(), tunnelUpdateDto.getProtocol()) ||
-                !Objects.equals(existingTunnel.getInterfaceName(), tunnelUpdateDto.getInterfaceName())) {
+        !Objects.equals(existingTunnel.getInterfaceName(), tunnelUpdateDto.getInterfaceName()) ||
+        !Objects.equals(existingTunnel.getRelayChain(), tunnelUpdateDto.getRelayChain())) {
             up++;
         }
 
@@ -191,6 +199,7 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
         existingTunnel.setTrafficRatio(tunnelUpdateDto.getTrafficRatio());
         existingTunnel.setProtocol(tunnelUpdateDto.getProtocol());
         existingTunnel.setInterfaceName(tunnelUpdateDto.getInterfaceName());
+    existingTunnel.setRelayChain(tunnelUpdateDto.getRelayChain());
         this.updateById(existingTunnel);
         int err = 0;
         if (up != 0){

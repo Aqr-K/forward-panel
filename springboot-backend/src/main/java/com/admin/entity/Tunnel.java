@@ -70,4 +70,10 @@ public class Tunnel extends BaseEntity {
     private String udpListenAddr;
 
     private String interfaceName;
+
+    /**
+     * 多级代理链（中继节点地址列表），按顺序，每行一个，格式: host:port 或 [ipv6]:port 或 domain:port
+     * 仅在隧道转发(type=2)时生效；为空表示直连出口节点
+     */
+    private String relayChain;
 }

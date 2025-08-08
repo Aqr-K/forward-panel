@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 import { Button } from "@heroui/button";
-import { Input } from "@heroui/input";
+import { Input, Textarea } from "@heroui/input";
 import { Select, SelectItem } from "@heroui/select";
 import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/modal";
 import { Chip } from "@heroui/chip";
@@ -54,6 +54,7 @@ interface TunnelForm {
   tcpListenAddr: string;
   udpListenAddr: string;
   interfaceName?: string;
+  relayChain?: string;
   flow: number;
   trafficRatio: number;
   status: number;
@@ -180,6 +181,30 @@ export default function TunnelPage() {
       if (!form.protocol) {
         newErrors.protocol = '请选择协议类型';
       }
+
+      // relayChain 基础校验：每行必须包含端口
+      if (form.relayChain && form.relayChain.trim().length > 0) {
+        const lines = form.relayChain.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const bad = lines.find(l => {
+          // 允许 [v6]:port、host:port、domain:port
+          if (l.startsWith('[')) {
+            // 简单校验是否包含 ]:port
+            const idx = l.indexOf(']');
+            if (idx < 0) return true;
+            const rest = l.substring(idx + 1);
+            return !rest.startsWith(':') || rest.length <= 1;
+          }
+          // 其他情况，必须含最后一个冒号后为数字端口
+          const pos = l.lastIndexOf(':');
+          if (pos <= 0 || pos === l.length - 1) return true;
+          const portStr = l.substring(pos + 1);
+          const port = Number(portStr);
+          return !Number.isInteger(port) || port < 1 || port > 65535;
+        });
+        if (bad) {
+          newErrors.relayChain = `中继地址格式错误: ${bad}`;
+        }
+      }
     }
     
     setErrors(newErrors);
@@ -198,6 +223,7 @@ export default function TunnelPage() {
       tcpListenAddr: '0.0.0.0',
       udpListenAddr: '0.0.0.0',
       interfaceName: '',
+  relayChain: '',
       flow: 1,
       trafficRatio: 1.0,
       status: 1
@@ -219,6 +245,7 @@ export default function TunnelPage() {
       tcpListenAddr: tunnel.tcpListenAddr || '0.0.0.0',
       udpListenAddr: tunnel.udpListenAddr || '0.0.0.0',
       interfaceName: tunnel.interfaceName || '',
+  relayChain: (tunnel as any).relayChain || '',
       flow: tunnel.flow,
       trafficRatio: tunnel.trafficRatio,
       status: tunnel.status
@@ -838,6 +865,17 @@ export default function TunnelPage() {
                             </SelectItem>
                           ))}
                         </Select>
+
+                        <Textarea
+                          label="中继链（多级代理）"
+                          placeholder="每行一个中继地址，例如:\n1.1.1.1:443\n[2606:4700:4700::1111]:443\nh1.example.com:8443"
+                          value={form.relayChain || ''}
+                          onChange={(e) => setForm(prev => ({ ...prev, relayChain: e.target.value }))}
+                          minRows={3}
+                          variant="bordered"
+                          isInvalid={!!errors.relayChain}
+                          errorMessage={errors.relayChain}
+                        />
                       </>
                     )}
 
@@ -853,6 +891,13 @@ export default function TunnelPage() {
                         variant="flat"
                         title="出口网卡名或IP"
                         description="用于多IP服务器指定使用那个IP和出口服务器通讯，不懂的默认为空就行"
+                        className="mt-4"
+                      />
+                      <Alert
+                        color="primary"
+                        variant="flat"
+                        title="中继链（多级代理）"
+                        description="仅隧道转发生效。按顺序逐行填写中继节点地址，最后会自动连接到出口节点服务。留空表示入口直连出口。"
                         className="mt-4"
                       />
                   </div>

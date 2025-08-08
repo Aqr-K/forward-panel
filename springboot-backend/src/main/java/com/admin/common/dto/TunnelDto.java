@@ -42,4 +42,7 @@ public class TunnelDto {
     
     // UDP监听地址，默认为0.0.0.0
     private String udpListenAddr = "0.0.0.0";
+
+    // 多级代理链（中继节点列表），按顺序换行分隔，仅隧道转发时可选
+    private String relayChain;
 } 
