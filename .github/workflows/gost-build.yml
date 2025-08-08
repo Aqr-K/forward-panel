@@ -60,6 +60,7 @@ jobs:
           sha256sum "${FINAL_NAME}" > "${BASE_NAME}.sha256"
           
           echo "asset_name=${FINAL_NAME}" >> $GITHUB_OUTPUT
+          echo "sha256_name=${BASE_NAME}.sha256" >> $GITHUB_OUTPUT
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -67,7 +68,7 @@ jobs:
           name: gost-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             go-gost/${{ steps.build.outputs.asset_name }}
-            go-gost/${{ steps.build.outputs.asset_name }}.sha256
+            go-gost/${{ steps.build.outputs.sha256_name }}
 
   # 创建 GitHub Release
   release:
