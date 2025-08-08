@@ -63,7 +63,7 @@ func splitHostPort(addr string) (string, string, error) {
 	}
 	return netSplitHostPortCompat(addr)
 }
-。
+
 func netSplitHostPortCompat(addr string) (string, string, error) {
 	lastColon := strings.LastIndex(addr, ":")
 	if lastColon < 0 {
