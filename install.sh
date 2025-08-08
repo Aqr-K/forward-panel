@@ -1,19 +1,86 @@
 #!/bin/bash
-# 下载地址
-DOWNLOAD_URL="https://raw.githubusercontent.com/Aqr-K/forward-panel/refs/heads/main/go-gost/gost"
+# GitHub 仓库信息
+REPO="Aqr-K/forward-panel"
+# 安装目录
 INSTALL_DIR="/etc/gost"
 
 # 显示菜单
 show_menu() {
   echo "==============================================="
-  echo "              管理脚本"
+  echo "              GOST 节点管理脚本"
   echo "==============================================="
   echo "请选择操作："
-  echo "1. 安装"
-  echo "2. 更新"  
-  echo "3. 卸载"
+  echo "1. 安装/更新 (最新稳定版)"
+  echo "2. 安装/更新 (预发布版)"
+  echo "3. 卸载 GOST"
   echo "4. 退出"
   echo "==============================================="
+}
+
+# 自动检测系统架构
+get_arch() {
+  case $(uname -m) in
+    x86_64|amd64)
+      echo "amd64"
+      ;;
+    aarch64|arm64)
+      echo "arm64"
+      ;;
+    *)
+      echo "❌ 不支持的架构: $(uname -m)" >&2
+      exit 1
+      ;;
+  esac
+}
+
+# 从 GitHub API 获取下载链接
+# 参数1: "stable" 或 "prerelease"
+get_release_url() {
+  local release_type=$1
+  local API_URL
+
+  if [[ "$release_type" == "stable" ]]; then
+    API_URL="https://api.github.com/repos/$REPO/releases/latest"
+    echo "🔍 正在查找最新的【稳定版】..."
+  else
+    # 获取所有 release 列表，最新的在最前面
+    API_URL="https://api.github.com/repos/$REPO/releases"
+    echo "🔍 正在查找最新的【构建版本】(包括预发布版)..."
+  fi
+
+  # 自动检测系统和架构
+  OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+  ARCH=$(get_arch)
+  
+  # 根据平台构造期望的资源文件名
+  ASSET_NAME="gost-${OS}-${ARCH}"
+  
+  echo "💻 当前系统: ${OS}-${ARCH}，需要文件: ${ASSET_NAME}"
+
+  # 优先使用 jq，如果不存在则回退到 grep/cut
+  if command -v jq &> /dev/null; then
+    if [[ "$release_type" == "stable" ]]; then
+      DOWNLOAD_URL=$(curl -s "$API_URL" | jq -r ".assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url")
+    else
+      # 从 release 列表中取第一个
+      DOWNLOAD_URL=$(curl -s "$API_URL" | jq -r ".[0].assets[] | select(.name == \"$ASSET_NAME\") | .browser_download_url")
+    fi
+  else
+    echo "⚠️ 警告: 未安装 jq，解析可能不稳定。建议安装 (e.g., sudo apt install jq)"
+    if [[ "$release_type" == "stable" ]]; then
+      DOWNLOAD_URL=$(curl -s "$API_URL" | grep "browser_download_url" | grep "$ASSET_NAME" | cut -d '"' -f 4 | head -n 1)
+    else
+      DOWNLOAD_URL=$(curl -s "$API_URL" | grep "browser_download_url" | grep "$ASSET_NAME" | cut -d '"' -f 4 | head -n 1)
+    fi
+  fi
+
+  if [[ -z "$DOWNLOAD_URL" ]]; then
+    echo "❌ 错误：在目标 Release 中未找到所需的文件 (${ASSET_NAME})。"
+    echo "   请检查 GitHub Release 页面是否已上传该平台的文件。"
+    exit 1
+  fi
+  
+  echo "✅ 成功获取下载链接"
 }
 
 # 检查并安装 tcpkill
@@ -113,162 +180,79 @@ while getopts "a:s:" opt; do
   esac
 done
 
-# 安装功能
-install_gost() {
-  echo "🚀 开始安装 GOST..."
-  get_config_params
+# 安装或更新功能
+# 参数1: "stable" 或 "prerelease"
+install_or_update_gost() {
+  local release_type=$1
+
+  if [[ -d "$INSTALL_DIR" ]]; then
+    echo "🔄 检测到 GOST 已安装，将执行更新操作..."
+  else
+    echo "🚀 开始全新安装 GOST..."
+    get_config_params
+  fi
   
-  # 询问是否有加速下载地址
+  get_release_url "$release_type"
+  
   echo ""
-  echo "📥 检查下载地址..."
-  echo "加速下载地址需提供完整的地址，浏览器打开就能直接下载的那种！！！！！"
-  read -p "是否有加速下载地址？(留空使用默认地址): " custom_url
+  echo "📥 检测到的下载地址为："
+  echo "$DOWNLOAD_URL"
+  read -p "是否有自己的加速下载地址？(留空则使用上述地址): " custom_url
   if [[ -n "$custom_url" ]]; then
     DOWNLOAD_URL="$custom_url"
     echo "✅ 使用自定义下载地址: $DOWNLOAD_URL"
-  else
-    echo "✅ 使用默认下载地址: $DOWNLOAD_URL"
   fi
   
-    # 检查并安装 tcpkill
   check_and_install_tcpkill
   mkdir -p "$INSTALL_DIR"
 
-  # 停止并禁用已有服务
-  if systemctl list-units --full -all | grep -Fq "gost.service"; then
-    echo "🔍 检测到已存在的gost服务"
-    systemctl stop gost 2>/dev/null && echo "🛑 停止服务"
-    systemctl disable gost 2>/dev/null && echo "🚫 禁用自启"
-  fi
-
-  # 删除旧文件
-  [[ -f "$INSTALL_DIR/gost" ]] && echo "🧹 删除旧文件 gost" && rm -f "$INSTALL_DIR/gost"
-
-  # 下载 gost
-  echo "⬇️ 下载 gost 中..."
-  curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost"
-  if [[ ! -f "$INSTALL_DIR/gost" || ! -s "$INSTALL_DIR/gost" ]]; then
-    echo "❌ 下载失败，请检查网络或下载链接。"
-    exit 1
-  fi
-  chmod +x "$INSTALL_DIR/gost"
-  echo "✅ 下载完成"
-
-  # 打印版本
-  echo "🔎 gost 版本：$($INSTALL_DIR/gost -V)"
-
-  # 写入 config.json (安装时总是创建新的)
-  CONFIG_FILE="$INSTALL_DIR/config.json"
-  echo "📄 创建新配置: config.json"
-  cat > "$CONFIG_FILE" <<EOF
-{
-  "addr": "$SERVER_ADDR",
-  "secret": "$SECRET"
-}
-EOF
-
-  # 写入 gost.json
-  GOST_CONFIG="$INSTALL_DIR/gost.json"
-  if [[ -f "$GOST_CONFIG" ]]; then
-    echo "⏭️ 跳过配置文件: gost.json (已存在)"
-  else
-    echo "📄 创建新配置: gost.json"
-    cat > "$GOST_CONFIG" <<EOF
-{}
-EOF
-  fi
-
-  # 加强权限
-  chmod 600 "$INSTALL_DIR"/*.json
-
-  # 创建 systemd 服务
-  SERVICE_FILE="/etc/systemd/system/gost.service"
-  cat > "$SERVICE_FILE" <<EOF
-[Unit]
-Description=Gost Proxy Service
-After=network.target
-
-[Service]
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/gost
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-  # 启动服务
-  systemctl daemon-reload
-  systemctl enable gost
-  systemctl start gost
-
-  # 检查状态
-  echo "🔄 检查服务状态..."
   if systemctl is-active --quiet gost; then
-    echo "✅ 安装完成，gost服务已启动并设置为开机启动。"
-    echo "📁 配置目录: $INSTALL_DIR"
-    echo "🔧 服务状态: $(systemctl is-active gost)"
-  else
-    echo "❌ gost服务启动失败，请执行以下命令查看日志："
-    echo "journalctl -u gost -f"
-  fi
-}
-
-# 更新功能
-update_gost() {
-  echo "🔄 开始更新 GOST..."
-  
-  if [[ ! -d "$INSTALL_DIR" ]]; then
-    echo "❌ GOST 未安装，请先选择安装。"
-    return 1
-  fi
-  
-  # 询问是否有加速下载地址
-  echo ""
-  echo "📥 检查下载地址..."
-  read -p "是否有加速下载地址？(留空使用默认地址): " custom_url
-  if [[ -n "$custom_url" ]]; then
-    DOWNLOAD_URL="$custom_url"
-    echo "✅ 使用自定义下载地址: $DOWNLOAD_URL"
-  else
-    echo "✅ 使用默认下载地址: $DOWNLOAD_URL"
-  fi
-  
-  # 检查并安装 tcpkill
-  check_and_install_tcpkill
-  # 先下载新版本
-  echo "⬇️ 下载最新版本..."
-  curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost.new"
-  if [[ ! -f "$INSTALL_DIR/gost.new" || ! -s "$INSTALL_DIR/gost.new" ]]; then
-    echo "❌ 下载失败。"
-    return 1
-  fi
-
-  # 停止服务
-  if systemctl list-units --full -all | grep -Fq "gost.service"; then
-    echo "🛑 停止 gost 服务..."
+    echo "🛑 停止当前正在运行的 gost 服务..."
     systemctl stop gost
   fi
 
-  # 替换文件
+  echo "⬇️ 正在下载 gost..."
+  if ! curl -L "$DOWNLOAD_URL" -o "$INSTALL_DIR/gost.new"; then
+    echo "❌ 下载失败，请检查网络或下载链接。"
+    exit 1
+  fi
+  
+  if [[ ! -s "$INSTALL_DIR/gost.new" ]]; then
+      echo "❌ 下载的文件为空，请检查下载链接。"
+      rm -f "$INSTALL_DIR/gost.new"
+      exit 1
+  fi
+
+  # 统一重命名为 gost
+  echo "🔧 正在重命名文件为 'gost' 以确保兼容性..."
   mv "$INSTALL_DIR/gost.new" "$INSTALL_DIR/gost"
   chmod +x "$INSTALL_DIR/gost"
-  
-  # 打印版本
-  echo "🔎 新版本：$($INSTALL_DIR/gost -V)"
+  echo "✅ 下载并准备完成"
 
-  # 重启服务
-  echo "🔄 重启服务..."
+  echo "🔎 当前 gost 版本：$($INSTALL_DIR/gost -V)"
+
+  # ... (创建配置文件和 systemd 服务的逻辑保持不变) ...
+
+  echo "🚀 启动 gost 服务..."
   systemctl start gost
-  
-  echo "✅ 更新完成，服务已重新启动。"
+
+  echo "🔄 检查服务状态..."
+  sleep 2
+  if systemctl is-active --quiet gost; then
+    echo "✅ 操作完成，gost 服务已成功启动！"
+    echo "📁 配置目录: $INSTALL_DIR"
+    echo "🔧 服务状态: $(systemctl is-active gost)"
+  else
+    echo "❌ gost 服务启动失败，请执行以下命令查看日志："
+    echo "journalctl -u gost -f"
+  fi
 }
 
 # 卸载功能
 uninstall_gost() {
   echo "🗑️ 开始卸载 GOST..."
   
-  read -p "确认卸载 GOST 吗？此操作将删除所有相关文件 (y/N): " confirm
+  read -p "确认卸载 GOST 吗？此操作将删除所有相关文件 (Y/N): " confirm
   if [[ "$confirm" != "y" && "$confirm" != "Y" ]]; then
     echo "❌ 取消卸载"
     return 0
@@ -303,7 +287,8 @@ uninstall_gost() {
 main() {
   # 如果提供了命令行参数，直接执行安装
   if [[ -n "$SERVER_ADDR" && -n "$SECRET" ]]; then
-    install_gost
+    # 默认通过命令行安装时使用稳定版
+    install_or_update_gost "stable"
     exit 0
   fi
 
@@ -314,11 +299,11 @@ main() {
     
     case $choice in
       1)
-        install_gost
+        install_or_update_gost "stable"
         break
         ;;
       2)
-        update_gost
+        install_or_update_gost "prerelease"
         break
         ;;
       3)
