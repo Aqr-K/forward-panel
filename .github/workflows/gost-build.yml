@@ -1,5 +1,7 @@
 name: Build and Release Gost
 
+run-name: Build and Release Gost for ${{ inputs.prerelease && 'Pre-release' || 'Release' }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -65,7 +67,7 @@ jobs:
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: gost-artifact-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: gostt-${{ matrix.goos }}-${{ matrix.goarch }}
           path: ${{ steps.build.outputs.asset_name }}
 
   # 创建 GitHub Release
@@ -98,12 +100,12 @@ jobs:
         with:
           tag_name: gost-build-${{ steps.generate_info.outputs.release_time }}
           # Release 的标题
-          name: "${{ github.event.inputs.prerelease && 'GOST 预发布版' || 'GOST 正式版' }} ${{ steps.generate_info.outputs.display_time }}"
+          name: "${{ inputs.prerelease && 'GOST 预发布版' || 'GOST 正式版' }} ${{ steps.generate_info.outputs.display_time }}"
           body: |
             由 GitHub Actions 自动构建的 GOST。
             - **发布时间**: ${{ steps.generate_info.outputs.display_time }}
             - **提交哈希**: `${{ github.sha }}`
           # 是否标记为预发布版本
-          prerelease: ${{ github.event.inputs.prerelease }}
+          prerelease: ${{ inputs.prerelease }}
           files: |
             release-assets/**/*
