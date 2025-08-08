@@ -249,7 +249,6 @@ public class GostUtil {
     private static JSONObject createListener(String protocol) {
         JSONObject listener = new JSONObject();
         listener.put("type", protocol);
-        if (Objects.equals(protocol, "udp")){
         if (Objects.equals(protocol, "udp")) {
             JSONObject metadata = new JSONObject();
             metadata.put("keepAlive", true);
