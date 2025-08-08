@@ -1,0 +1,97 @@
+name: build-and-release-gost
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: '预发布版本'
+        required: true
+        type: boolean
+        default: true
+
+jobs:
+  build:
+    name: Build GOST for ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin] # 操作系统
+        goarch: [amd64, arm64]       # CPU 架构
+        exclude:
+          # 如果有不需要的组合，可以在这里排除
+          - goos: windows
+            goarch: arm64
+
+    # 构建各个平台的二进制文件
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Build binary
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+        # 执行实际的构建命令
+        run: |
+          # 根据操作系统定义输出文件名（Windows 需要 .exe 后缀）
+          OUTPUT_NAME="gost"
+          if [ "${{ matrix.goos }}" == "windows" ]; then
+            OUTPUT_NAME="gost.exe"
+          fi
+          
+          echo "正在为 ${{ matrix.goos }}/${{ matrix.goarch }} 进行构建..."
+          go build -v -o "${OUTPUT_NAME}" -ldflags="-s -w" .
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          # 为每个平台的产物定义一个唯一的名称，方便后续识别
+          name: gost-${{ matrix.goos }}-${{ matrix.goarch }}
+          # 要上传的文件路径。使用通配符以匹配 'gost' 和 'gost.exe'
+          path: gost*
+
+  # 创建 GitHub Release
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Generate release information
+        id: generate_info
+        run: |
+          # 1. 生成用于 Git 标签的、干净的日期字符串
+          # 格式: YYYY-MM-DD-HHMMSS
+          echo "tag_name=gost-build-$(TZ='Asia/Shanghai' date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_OUTPUT
+          
+          # 2. 生成用于在 Release 页面显示的、人类可读的日期字符串
+          # 格式: YYYY-MM-DD HH:MM:SS (UTC +8:00)
+          echo "display_time=$(TZ='Asia/Shanghai' date +'%Y-%m-%d %H:%M:%S (UTC +8:00)')" >> $GITHUB_OUTPUT
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: gost_build_${{ steps.generate_info.outputs.display_time }}
+          # Release 的标题
+          name: ${{ github.event.inputs.prerelease == 'true' && 'GOST 预发布版' || 'GOST 正式版' }} ${{ steps.generate_info.outputs.display_time }}
+          body: |
+            由 GitHub Actions 自动构建的 GOST。
+            - **发布时间**: ${{ steps.generate_info.outputs.display_time }}
+            - **提交哈希**: `${{ github.sha }}`
+          # 是否标记为预发布版本
+          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          files: |
+            release-assets/**/*
