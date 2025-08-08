@@ -1,4 +1,4 @@
-name: build-and-release-gost
+name: Build and Release Gost
 
 on:
   workflow_dispatch:
@@ -87,7 +87,7 @@ jobs:
         run: |
           # 1. 生成用于 Git 标签的、干净的日期字符串
           # 格式: YYYY-MM-DD-HHMMSS
-          echo "tag_name=gost-build-$(TZ='Asia/Shanghai' date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_OUTPUT
+          echo "release_time=$(TZ='Asia/Shanghai' date +'%Y-%m-%d-%H%M%S')" >> $GITHUB_OUTPUT
           
           # 2. 生成用于在 Release 页面显示的、人类可读的日期字符串
           # 格式: YYYY-MM-DD HH:MM:SS (UTC +8:00)
@@ -96,7 +96,7 @@ jobs:
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: gost_build_${{ steps.generate_info.outputs.tag_name }}
+          tag_name: gost-build-${{ steps.generate_info.outputs.release_time }}
           # Release 的标题
           name: "${{ github.event.inputs.prerelease && 'GOST 预发布版' || 'GOST 正式版' }} ${{ steps.generate_info.outputs.display_time }}"
           body: |
