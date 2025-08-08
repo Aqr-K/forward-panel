@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"strconv"
 	"time"
+ "strings"
 )
 
 func ForceClosePortConnections(addr string) (err error) {
