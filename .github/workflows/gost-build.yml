@@ -10,6 +10,8 @@ on:
         default: true
 
 jobs:
+
+  # 构建 GOST 二进制文件
   build:
     name: Build GOST for ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ubuntu-latest
@@ -22,7 +24,6 @@ jobs:
           - goos: windows
             goarch: arm64
 
-    # 构建各个平台的二进制文件
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -30,31 +31,42 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
+          go-version-file: 'go-gost/go.mod'
           cache: true
 
-      - name: Build binary
+      - name: Build and Rename binary
+        id: build
+        working-directory: ./go-gost
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        # 执行实际的构建命令
         run: |
-          # 根据操作系统定义输出文件名（Windows 需要 .exe 后缀）
+          # 定义原始输出名
           OUTPUT_NAME="gost"
           if [ "${{ matrix.goos }}" == "windows" ]; then
             OUTPUT_NAME="gost.exe"
           fi
           
-          echo "正在为 ${{ matrix.goos }}/${{ matrix.goarch }} 进行构建..."
+          # 定义带有平台信息的最终文件名
+          FINAL_NAME="gost-${{ matrix.goos }}-${{ matrix.goarch }}"
+          if [ "${{ matrix.goos }}" == "windows" ]; then
+            FINAL_NAME="${FINAL_NAME}.exe"
+          fi
+
+          echo "正在构建..."
           go build -v -o "${OUTPUT_NAME}" -ldflags="-s -w" .
+          
+          echo "重命名为 ${FINAL_NAME}"
+          mv "${OUTPUT_NAME}" "${FINAL_NAME}"
+          
+          # 将最终文件名设置为步骤输出，方便上传
+          echo "asset_name=${FINAL_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          # 为每个平台的产物定义一个唯一的名称，方便后续识别
-          name: gost-${{ matrix.goos }}-${{ matrix.goarch }}
-          # 要上传的文件路径。使用通配符以匹配 'gost' 和 'gost.exe'
-          path: gost*
+          name: gost-artifact-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: ${{ steps.build.outputs.asset_name }}
 
   # 创建 GitHub Release
   release:
@@ -84,14 +96,14 @@ jobs:
       - name: Create Release and Upload Assets
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: gost_build_${{ steps.generate_info.outputs.display_time }}
+          tag_name: gost_build_${{ steps.generate_info.outputs.tag_name }}
           # Release 的标题
-          name: ${{ github.event.inputs.prerelease == 'true' && 'GOST 预发布版' || 'GOST 正式版' }} ${{ steps.generate_info.outputs.display_time }}
+          name: "${{ github.event.inputs.prerelease && 'GOST 预发布版' || 'GOST 正式版' }} ${{ steps.generate_info.outputs.display_time }}"
           body: |
             由 GitHub Actions 自动构建的 GOST。
             - **发布时间**: ${{ steps.generate_info.outputs.display_time }}
             - **提交哈希**: `${{ github.sha }}`
           # 是否标记为预发布版本
-          prerelease: ${{ github.event.inputs.prerelease == 'true' }}
+          prerelease: ${{ github.event.inputs.prerelease }}
           files: |
             release-assets/**/*
