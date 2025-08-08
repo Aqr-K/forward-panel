@@ -25,9 +25,9 @@ show_update_notice() {
 }
 
 # 全局下载地址配置
-DOCKER_COMPOSEV4_URL="https://raw.githubusercontent.com/bqlpfy/forward-panel/refs/heads/main/docker-compose-v4.yml"
-DOCKER_COMPOSEV6_URL="https://raw.githubusercontent.com/bqlpfy/forward-panel/refs/heads/main/docker-compose-v6.yml"
-GOST_SQL_URL="https://raw.githubusercontent.com/bqlpfy/forward-panel/refs/heads/main/gost.sql"
+DOCKER_COMPOSEV4_URL="https://raw.githubusercontent.com/Aqr-K/forward-panel/refs/heads/main/docker-compose-v4.yml"
+DOCKER_COMPOSEV6_URL="https://raw.githubusercontent.com/Aqr-K/forward-panel/refs/heads/main/docker-compose-v6.yml"
+GOST_SQL_URL="https://raw.githubusercontent.com/Aqr-K/forward-panel/refs/heads/main/gost.sql"
 
 # 根据IPv6支持情况选择docker-compose URL
 get_docker_compose_url() {
@@ -280,8 +280,8 @@ update_panel() {
   # 检查后端容器健康状态
   echo "🔍 检查后端服务状态..."
   for i in {1..90}; do
-    if docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
-      BACKEND_HEALTH=$(docker inspect -f '{{.State.Health.Status}}' springboot-backend 2>/dev/null || echo "unknown")
+    if docker ps --format "{{.Names}}" | grep -q "^forward-panel-backend$"; then
+      BACKEND_HEALTH=$(docker inspect -f '{{.State.Health.Status}}' forward-panel-backend 2>/dev/null || echo "unknown")
       if [[ "$BACKEND_HEALTH" == "healthy" ]]; then
         echo "✅ 后端服务健康检查通过"
         break
@@ -297,7 +297,7 @@ update_panel() {
     fi
     if [ $i -eq 90 ]; then
       echo "❌ 后端服务启动超时（90秒）"
-      echo "🔍 当前状态：$(docker inspect -f '{{.State.Health.Status}}' springboot-backend 2>/dev/null || echo '容器不存在')"
+      echo "🔍 当前状态：$(docker inspect -f '{{.State.Health.Status}}' forward-panel-backend 2>/dev/null || echo '容器不存在')"
       echo "🛑 更新终止"
       return 1
     fi
@@ -347,7 +347,7 @@ update_panel() {
   sleep 5
   
   # 先检查后端容器是否在运行
-  if ! docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
+  if ! docker ps --format "{{.Names}}" | grep -q "^forward-panel-backend$"; then
     echo "❌ 后端容器未运行，无法获取数据库配置"
     echo "🔍 当前运行的容器："
     docker ps --format "table {{.Names}}\t{{.Status}}"
@@ -355,7 +355,7 @@ update_panel() {
     return 1
   fi
   
-  DB_INFO=$(docker exec springboot-backend env | grep "^DB_" 2>/dev/null || echo "")
+  DB_INFO=$(docker exec forward-panel-backend env | grep "^DB_" 2>/dev/null || echo "")
   
   if [[ -n "$DB_INFO" ]]; then
     DB_NAME=$(echo "$DB_INFO" | grep "^DB_NAME=" | cut -d'=' -f2)
@@ -370,8 +370,8 @@ update_panel() {
   else
     echo "❌ 无法获取数据库配置信息"
     echo "🔍 尝试诊断问题："
-    echo "   容器状态: $(docker inspect -f '{{.State.Status}}' springboot-backend 2>/dev/null || echo '容器不存在')"
-    echo "   健康状态: $(docker inspect -f '{{.State.Health.Status}}' springboot-backend 2>/dev/null || echo '无健康检查')"
+    echo "   容器状态: $(docker inspect -f '{{.State.Status}}' forward-panel-backend 2>/dev/null || echo '容器不存在')"
+    echo "   健康状态: $(docker inspect -f '{{.State.Health.Status}}' forward-panel-backend 2>/dev/null || echo '无健康检查')"
     
     # 尝试从 .env 文件读取配置
     if [[ -f ".env" ]]; then
@@ -875,7 +875,7 @@ export_migration_sql() {
   echo "🔍 获取数据库配置信息..."
   
   # 先检查后端容器是否在运行
-  if ! docker ps --format "{{.Names}}" | grep -q "^springboot-backend$"; then
+  if ! docker ps --format "{{.Names}}" | grep -q "^forward-panel-backend$"; then
     echo "❌ 后端容器未运行，尝试从 .env 文件读取配置..."
     
     # 从 .env 文件读取配置
@@ -896,7 +896,7 @@ export_migration_sql() {
     fi
   else
     # 从容器环境变量获取数据库信息
-    DB_INFO=$(docker exec springboot-backend env | grep "^DB_" 2>/dev/null || echo "")
+    DB_INFO=$(docker exec forward-panel-backend env | grep "^DB_" 2>/dev/null || echo "")
     
     if [[ -n "$DB_INFO" ]]; then
       DB_NAME=$(echo "$DB_INFO" | grep "^DB_NAME=" | cut -d'=' -f2)
