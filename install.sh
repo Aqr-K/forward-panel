@@ -231,7 +231,57 @@ install_or_update_gost() {
 
   echo "🔎 当前 gost 版本：$($INSTALL_DIR/gost -V)"
 
-  # ... (创建配置文件和 systemd 服务的逻辑保持不变) ...
+  # 检查并创建 config.json
+  if [[ ! -f "$INSTALL_DIR/config.json" ]]; then
+    echo "📄 正在创建配置文件: config.json"
+    cat > "$INSTALL_DIR/config.json" <<EOF
+{
+  "addr": "$SERVER_ADDR",
+  "secret": "$SECRET"
+}
+EOF
+  fi
+
+  # 检查并创建 gost.json
+  if [[ ! -f "$INSTALL_DIR/gost.json" ]]; then
+    echo "📄 正在创建配置文件: gost.json"
+    cat > "$INSTALL_DIR/gost.json" <<EOF
+{}
+EOF
+  fi
+  
+  # 确保配置文件权限安全
+  chmod 600 "$INSTALL_DIR"/*.json
+
+  # 检查并创建 systemd 服务文件
+  if [[ ! -f "/etc/systemd/system/gost.service" ]]; then
+    echo "⚙️ 正在创建 systemd 服务..."
+    # 使用 sudo 来确保有权限写入 /etc/systemd/system 目录
+    if [[ $EUID -ne 0 ]]; then
+      SUDO_CMD="sudo"
+    else
+      SUDO_CMD=""
+    fi
+    
+    $SUDO_CMD tee "/etc/systemd/system/gost.service" > /dev/null <<EOF
+[Unit]
+Description=Gost Proxy Service
+After=network.target
+
+[Service]
+WorkingDirectory=$INSTALL_DIR
+ExecStart=$INSTALL_DIR/gost
+Restart=on-failure
+User=root
+Group=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+    # 创建完服务文件后，需要重载 systemd 配置并启用服务
+    $SUDO_CMD systemctl daemon-reload
+    $SUDO_CMD systemctl enable gost
+  fi
 
   echo "🚀 启动 gost 服务..."
   systemctl start gost
