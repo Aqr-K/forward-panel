@@ -232,14 +232,47 @@ install_or_update_gost() {
   echo "🔎 当前 gost 版本：$($INSTALL_DIR/gost -V)"
 
   # 检查并创建 config.json
-  if [[ ! -f "$INSTALL_DIR/config.json" ]]; then
-    echo "📄 正在创建配置文件: config.json"
+  if [[ "$is_install" = true ]]; then
+    echo "📄 正在创建全新的配置文件: config.json"
     cat > "$INSTALL_DIR/config.json" <<EOF
 {
   "addr": "$SERVER_ADDR",
   "secret": "$SECRET"
 }
 EOF
+  # 如果是更新操作，并且用户通过命令行提供了新值，则更新它
+  elif [[ -n "$SERVER_ADDR" || -n "$SECRET" ]]; then
+    echo "🔧 检测到新的配置参数，正在更新 config.json..."
+    # 为了安全地更新 JSON，使用 jq (如果存在)
+    if command -v jq &> /dev/null; then
+      # 读取旧值，然后用新值覆盖
+      temp_json=$(jq '.' "$INSTALL_DIR/config.json")
+      if [[ -n "$SERVER_ADDR" ]]; then
+        temp_json=$(echo "$temp_json" | jq --arg addr "$SERVER_ADDR" '.addr = $addr')
+      fi
+      if [[ -n "$SECRET" ]]; then
+        temp_json=$(echo "$temp_json" | jq --arg secret "$SECRET" '.secret = $secret')
+      fi
+      echo "$temp_json" > "$INSTALL_DIR/config.json"
+    else
+      # 如果没有 jq，则给出提示并使用一种简单的覆盖方法
+      echo "⚠️ 警告: 未安装 jq，将进行简单覆盖。建议安装 jq 以进行更安全的 JSON 更新。"
+      # 只有在两个参数都提供时才完全覆盖，避免只更新一个导致另一个丢失
+      if [[ -n "$SERVER_ADDR" && -n "$SECRET" ]]; then
+          cat > "$INSTALL_DIR/config.json" <<EOF
+{
+  "addr": "$SERVER_ADDR",
+  "secret": "$SECRET"
+}
+EOF
+      else
+        echo "❌ 错误: 在没有 jq 的情况下，必须同时提供 -a 和 -s 参数才能更新配置。"
+        # 恢复服务并退出，避免配置不一致
+        systemctl start gost
+        exit 1
+      fi
+    fi
+    echo "✅ config.json 更新完成。"
   fi
 
   # 检查并创建 gost.json
