@@ -184,11 +184,13 @@ done
 # 参数1: "stable" 或 "prerelease"
 install_or_update_gost() {
   local release_type=$1
+  local is_install=false
 
   if [[ -d "$INSTALL_DIR" ]]; then
     echo "🔄 检测到 GOST 已安装，将执行更新操作..."
   else
     echo "🚀 开始全新安装 GOST..."
+    is_install=true
     get_config_params
   fi
   
@@ -287,44 +289,45 @@ EOF
   chmod 600 "$INSTALL_DIR"/*.json
 
   # 检查并创建 systemd 服务文件
-  if [[ ! -f "/etc/systemd/system/gost.service" ]]; then
-    echo "⚙️ 正在创建 systemd 服务..."
-    # 使用 sudo 来确保有权限写入 /etc/systemd/system 目录
-    if [[ $EUID -ne 0 ]]; then
-      SUDO_CMD="sudo"
-    else
-      SUDO_CMD=""
-    fi
-    
-    $SUDO_CMD tee "/etc/systemd/system/gost.service" > /dev/null <<EOF
+  # 使用 sudo 来确保有权限写入 /etc/systemd/system 目录
+  if [[ $EUID -ne 0 ]]; then
+    SUDO_CMD="sudo"
+  else
+    SUDO_CMD=""
+  fi
+  
+  # 无论如何都重新创建或确认服务文件内容是正确的
+  echo "⚙️ 正在创建或更新 systemd 服务..."
+  $SUDO_CMD tee "/etc/systemd/system/gost.service" > /dev/null <<EOF
 [Unit]
 Description=Gost Proxy Service
 After=network.target
 
 [Service]
+Type=simple
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/gost
-Restart=on-failure
+ExecStart=$INSTALL_DIR/gost -C $INSTALL_DIR/gost.json
+Restart=always
+RestartSec=5
 User=root
 Group=root
 
 [Install]
 WantedBy=multi-user.target
 EOF
-    # 创建完服务文件后，需要重载 systemd 配置并启用服务
-    $SUDO_CMD systemctl daemon-reload
-    $SUDO_CMD systemctl enable gost
-  fi
+  # 创建完服务文件后，需要重载 systemd 配置并启用服务
+  $SUDO_CMD systemctl daemon-reload
+  $SUDO_CMD systemctl enable gost
 
   echo "🚀 启动 gost 服务..."
-  systemctl start gost
+  $SUDO_CMD systemctl start gost
 
   echo "🔄 检查服务状态..."
   sleep 2
   if systemctl is-active --quiet gost; then
     echo "✅ 操作完成，gost 服务已成功启动！"
     echo "📁 配置目录: $INSTALL_DIR"
-    echo "🔧 服务状态: $(systemctl is-active gost)"
+    echo "🔧 服务状态: $($SUDO_CMD systemctl is-active gost)"
   else
     echo "❌ gost 服务启动失败，请执行以下命令查看日志："
     echo "journalctl -u gost -f"
