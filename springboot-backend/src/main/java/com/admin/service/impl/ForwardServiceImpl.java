@@ -17,6 +17,7 @@ import com.alibaba.fastjson.JSONObject;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
@@ -964,6 +965,16 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     private R createGostServices(Forward forward, Tunnel tunnel, Integer limiter,  NodeInfo nodeInfo, UserTunnel userTunnel) {
         String serviceName = buildServiceName(forward.getId(), forward.getUserId(),  userTunnel);
 
+        // 当配置了 relayChain 时，先创建链
+        if (tunnel.getType() == TUNNEL_TYPE_PORT_FORWARD && StringUtils.isNotBlank(tunnel.getRelayChain())) {
+            String chainProtocol = StringUtils.isNotBlank(tunnel.getProtocol()) ? tunnel.getProtocol() : "tcp";
+            R chainResult = createPortForwardChain(nodeInfo.getInNode(), serviceName, tunnel, chainProtocol, tunnel.getInterfaceName());
+            if (chainResult.getCode() != 0) {
+                GostUtil.DeleteChains(nodeInfo.getInNode().getId(), serviceName);
+                return chainResult;
+            }
+        }
+
         // 隧道转发需要创建链和远程服务
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
             R chainResult = createChainService(nodeInfo.getInNode(), serviceName, tunnel, forward.getOutPort(), tunnel.getProtocol(), tunnel.getInterfaceName());
@@ -980,7 +991,7 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             }
         }
 
-        String interfaceName = null;
+    String interfaceName = null;
         // 创建主服务
         if (tunnel.getType() != TUNNEL_TYPE_TUNNEL_FORWARD) { // 不是隧道转发服务才会存在网络接口
             interfaceName = forward.getInterfaceName();
@@ -1004,6 +1015,19 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
     private R updateGostServices(Forward forward, Tunnel tunnel, Integer limiter, 
                                NodeInfo nodeInfo, UserTunnel userTunnel) {
         String serviceName = buildServiceName(forward.getId(), forward.getUserId(), userTunnel);
+
+        // 端口转发-中继链：当配置了 relayChain 时，更新链（或添加）
+        if (tunnel.getType() == TUNNEL_TYPE_PORT_FORWARD && StringUtils.isNotBlank(tunnel.getRelayChain())) {
+            String chainProtocol = StringUtils.isNotBlank(tunnel.getProtocol()) ? tunnel.getProtocol() : "tcp";
+            R chainResult = updatePortForwardChain(nodeInfo.getInNode(), serviceName, tunnel, chainProtocol, tunnel.getInterfaceName());
+            if (chainResult.getCode() != 0) {
+                updateForwardStatusToError(forward);
+                return chainResult;
+            }
+        } else {
+            // 若取消了 relayChain，确保链被清理
+            GostUtil.DeleteChains(nodeInfo.getInNode().getId(), serviceName);
+        }
 
         // 隧道转发需要更新链和远程服务
         if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
@@ -1122,8 +1146,8 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
             return R.err(serviceResult.getMsg());
         }
 
-        // 隧道转发需要删除链和远程服务
-        if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD) {
+        // 删除链
+        if (tunnel.getType() == TUNNEL_TYPE_TUNNEL_FORWARD || StringUtils.isNotBlank(tunnel.getRelayChain())) {
             GostDto chainResult = GostUtil.DeleteChains(nodeInfo.getInNode().getId(), serviceName);
             if (!isGostOperationSuccess(chainResult)) {
                 return R.err(chainResult.getMsg());
@@ -1138,6 +1162,28 @@ public class ForwardServiceImpl extends ServiceImpl<ForwardMapper, Forward> impl
         }
 
         return R.ok();
+    }
+
+    /**
+     * 为端口转发创建仅包含中继节点的链（不包含最终目的地址）
+     */
+    private R createPortForwardChain(Node inNode, String serviceName, Tunnel tunnel, String protocol, String interfaceName) {
+        // 对于端口转发，链里只放中继节点，最终目标由 forwarder 处理，因此 remoteAddr 传空
+        String remoteAddr = "";
+        GostDto result = GostUtil.AddChains(inNode.getId(), serviceName, remoteAddr, protocol, interfaceName, tunnel.getRelayChain());
+        return isGostOperationSuccess(result) ? R.ok() : R.err(result.getMsg());
+    }
+
+    /**
+     * 为端口转发更新仅包含中继节点的链（不存在则创建）
+     */
+    private R updatePortForwardChain(Node inNode, String serviceName, Tunnel tunnel, String protocol, String interfaceName) {
+        String remoteAddr = "";
+        GostDto createResult = GostUtil.UpdateChains(inNode.getId(), serviceName, remoteAddr, protocol, interfaceName, tunnel.getRelayChain());
+        if (createResult.getMsg().contains(GOST_NOT_FOUND_MSG)) {
+            createResult = GostUtil.AddChains(inNode.getId(), serviceName, remoteAddr, protocol, interfaceName, tunnel.getRelayChain());
+        }
+        return isGostOperationSuccess(createResult) ? R.ok() : R.err(createResult.getMsg());
     }
 
     /**

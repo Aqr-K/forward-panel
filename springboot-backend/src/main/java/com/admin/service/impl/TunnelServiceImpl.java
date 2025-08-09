@@ -137,12 +137,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             return outNodeSetupResult;
         }
 
-        // 5.1 保存多级代理链，仅隧道转发时生效
-        if (Objects.equals(tunnelDto.getType(), TUNNEL_TYPE_TUNNEL_FORWARD)) {
-            tunnel.setRelayChain(tunnelDto.getRelayChain());
-        } else {
-            tunnel.setRelayChain(null);
-        }
+    // 5.1 保存多级代理链：端口转发和隧道转发均允许配置（端口转发用于中继链）
+    tunnel.setRelayChain(tunnelDto.getRelayChain());
 
         // 6. 设置默认属性并保存
         setDefaultTunnelProperties(tunnel);
@@ -386,8 +382,8 @@ public class TunnelServiceImpl extends ServiceImpl<TunnelMapper, Tunnel> impleme
             String protocol = StrUtil.isNotBlank(tunnelDto.getProtocol()) ? tunnelDto.getProtocol() : "tls";
             tunnel.setProtocol(protocol);
         } else {
-            // 端口转发时，协议类型为null
-            tunnel.setProtocol(null);
+            // 端口转发时，协议类型为可选（用于中继链拨号协议），留空则在使用处默认 tcp
+            tunnel.setProtocol(StrUtil.isNotBlank(tunnelDto.getProtocol()) ? tunnelDto.getProtocol() : null);
         }
         
         // 设置TCP和UDP监听地址

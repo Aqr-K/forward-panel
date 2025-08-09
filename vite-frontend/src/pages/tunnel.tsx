@@ -100,7 +100,7 @@ export default function TunnelPage() {
     type: 1,
     inNodeId: null,
     outNodeId: null,
-    protocol: 'tls',
+  protocol: 'tcp',
     tcpListenAddr: '0.0.0.0',
     udpListenAddr: '0.0.0.0',
     interfaceName: '',
@@ -181,29 +181,29 @@ export default function TunnelPage() {
       if (!form.protocol) {
         newErrors.protocol = '请选择协议类型';
       }
+    }
 
-      // relayChain 基础校验：每行必须包含端口
-      if (form.relayChain && form.relayChain.trim().length > 0) {
-        const lines = form.relayChain.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-        const bad = lines.find(l => {
-          // 允许 [v6]:port、host:port、domain:port
-          if (l.startsWith('[')) {
-            // 简单校验是否包含 ]:port
-            const idx = l.indexOf(']');
-            if (idx < 0) return true;
-            const rest = l.substring(idx + 1);
-            return !rest.startsWith(':') || rest.length <= 1;
-          }
-          // 其他情况，必须含最后一个冒号后为数字端口
-          const pos = l.lastIndexOf(':');
-          if (pos <= 0 || pos === l.length - 1) return true;
-          const portStr = l.substring(pos + 1);
-          const port = Number(portStr);
-          return !Number.isInteger(port) || port < 1 || port > 65535;
-        });
-        if (bad) {
-          newErrors.relayChain = `中继地址格式错误: ${bad}`;
+    // relayChain 基础校验：无论类型，只要填写就校验每行必须包含端口
+    if (form.relayChain && form.relayChain.trim().length > 0) {
+      const lines = form.relayChain.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      const bad = lines.find(l => {
+        // 允许 [v6]:port、host:port、domain:port
+        if (l.startsWith('[')) {
+          // 简单校验是否包含 ]:port
+          const idx = l.indexOf(']');
+          if (idx < 0) return true;
+          const rest = l.substring(idx + 1);
+          return !rest.startsWith(':') || rest.length <= 1;
         }
+        // 其他情况，必须含最后一个冒号后为数字端口
+        const pos = l.lastIndexOf(':');
+        if (pos <= 0 || pos === l.length - 1) return true;
+        const portStr = l.substring(pos + 1);
+        const port = Number(portStr);
+        return !Number.isInteger(port) || port < 1 || port > 65535;
+      });
+      if (bad) {
+        newErrors.relayChain = `中继地址格式错误: ${bad}`;
       }
     }
     
@@ -219,7 +219,7 @@ export default function TunnelPage() {
       type: 1,
       inNodeId: null,
       outNodeId: null,
-      protocol: 'tls',
+  protocol: 'tcp',
       tcpListenAddr: '0.0.0.0',
       udpListenAddr: '0.0.0.0',
       interfaceName: '',
@@ -241,7 +241,7 @@ export default function TunnelPage() {
       type: tunnel.type,
       inNodeId: tunnel.inNodeId,
       outNodeId: tunnel.outNodeId || null,
-      protocol: tunnel.protocol || 'tls',
+  protocol: tunnel.protocol || 'tcp',
       tcpListenAddr: tunnel.tcpListenAddr || '0.0.0.0',
       udpListenAddr: tunnel.udpListenAddr || '0.0.0.0',
       interfaceName: tunnel.interfaceName || '',
@@ -288,7 +288,7 @@ export default function TunnelPage() {
       ...prev,
       type,
       outNodeId: type === 1 ? null : prev.outNodeId,
-      protocol: type === 1 ? 'tls' : prev.protocol
+  protocol: type === 1 ? 'tcp' : prev.protocol
     }));
   };
 

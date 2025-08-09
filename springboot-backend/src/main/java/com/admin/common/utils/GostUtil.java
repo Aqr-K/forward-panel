@@ -219,7 +219,7 @@ public class GostUtil {
         }
 
         // 配置处理器
-        JSONObject handler = createHandler(protocol, name, fow_type);
+    JSONObject handler = createHandler(protocol, name, fow_type, tunnel);
         service.put("handler", handler);
 
         // 配置监听器
@@ -234,12 +234,12 @@ public class GostUtil {
         return service;
     }
 
-    private static JSONObject createHandler(String protocol, String name, Integer fow_type) {
+    private static JSONObject createHandler(String protocol, String name, Integer fow_type, Tunnel tunnel) {
         JSONObject handler = new JSONObject();
         handler.put("type", protocol);
 
-        // 隧道转发需要添加链配置
-        if (isTunnelForwarding(fow_type)) {
+        // 添加链配置
+        if (isTunnelForwarding(fow_type) || (tunnel != null && org.apache.commons.lang3.StringUtils.isNotBlank(tunnel.getRelayChain()))) {
             handler.put("chain", name + "_chains");
         }
 
