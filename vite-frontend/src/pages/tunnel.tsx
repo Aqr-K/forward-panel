@@ -868,7 +868,11 @@ export default function TunnelPage() {
 
                         <Textarea
                           label="中继链（多级代理）"
-                          placeholder="每行一个中继地址，例如:\n1.1.1.1:443\n[2606:4700:4700::1111]:443\nh1.example.com:8443"
+                          placeholder="每行一个中继地址，例如:
+                          1.1.1.1:443
+                          [2606:4700:4700::1111]:443
+                          h1.example.com:8443
+                          "
                           value={form.relayChain || ''}
                           onChange={(e) => setForm(prev => ({ ...prev, relayChain: e.target.value }))}
                           minRows={3}
